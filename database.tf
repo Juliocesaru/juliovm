@@ -1,7 +1,3 @@
-provider "azurerm" {
-  features {}
-}
-
 variable "config_file" {
   description = "Path to the YAML configuration file"
   default     = "config.yaml"
