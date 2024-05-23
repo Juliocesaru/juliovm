@@ -7,11 +7,6 @@ locals {
   yamlconfiguration_data = yamldecode(file(var.yamlconfiguration))
 }
 
-resource "azurerm_resource_group" "juliovm" {
-  name     = "julio"
-  location = "East US"
-}
-
 resource "azurerm_virtual_network" "example" {
   name                = "example-network"
   address_space       = ["10.0.0.0/16"]
