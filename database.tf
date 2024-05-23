@@ -1,31 +1,78 @@
-locals{
-  vm=[for f in fileset("${path.module}/yamlconfiguration", "[^_]*.yaml") : yamldecode(file("${path.module}/yamlconfiguration/${f}"))]
-  vm_list = flatten([
-    for app in local.linux_app : [
-      for linuxapps in try(app.listoflinuxapp, []) :{
-        name=linuxapps.name
-        os_type=linuxapps.os_type
-        sku_name=linuxapps.sku_name
-      }
-    ]
-])
-}
-resource "azurerm_service_plan" "batcha06sp" {
-  for_each            ={for sp in local.linux_app_list: "${sp.name}"=>sp }
-  name                = each.value.name
-  resource_group_name = azurerm_resource_group.mcit420zz5um.name
-  location            = azurerm_resource_group.mcit420zz5um.location
-  os_type             = each.value.os_type
-  sku_name            = each.value.sku_name
+variable "yamlconfiguration" {
+  description = [for f in fileset("${path.module}/yamlconfiguration", "[^_]*.yaml") : yamldecode(file("${path.module}/yamlconfiguration/${f}"))]
+  default     = "vm.yaml"
 }
 
-resource "azurerm_linux_web_app" "batcha06webapp" {
-  for_each            = azurerm_service_plan.batcha06sp
-  name                = each.value.name
-  resource_group_name = azurerm_resource_group.mcit420zz5um.name
-  location            = azurerm_resource_group.mcit420zz5um.location
-  service_plan_id     = each.value.id
+locals {
+  yamlconfiguration_data = yamldecode(file(var.yamlconfiguration))
+}
 
+resource "azurerm_resource_group" "juliovm" {
+  name     = "julio"
+  location = "East US"
+}
 
-  site_config {}
+resource "azurerm_virtual_network" "example" {
+  name                = "example-network"
+  address_space       = ["10.0.0.0/16"]
+  location            = azurerm_resource_group.juliovm.location
+  resource_group_name = azurerm_resource_group.juliovm.name
+}
+
+resource "azurerm_subnet" "example" {
+  name                 = "internal"
+  resource_group_name  = azurerm_resource_group.juliovm.name
+  virtual_network_name = azurerm_virtual_network.juliovm.name
+  address_prefixes     = ["10.0.2.0/24"]
+}
+
+resource "azurerm_network_interface" "juliovm" {
+  count               = length(local.vm_config_data.vms)
+  name                = "${local.vm_config_data.vms[count.index].name}-nic"
+  location            = azurerm_resource_group.juliovm.location
+  resource_group_name = azurerm_resource_group.juliovm.name
+
+  ip_configuration {
+    name                          = "internal"
+    subnet_id                     = azurerm_subnet.example.id
+    private_ip_address_allocation = "Dynamic"
+  }
+}
+
+resource "azurerm_virtual_machine" "example" {
+  count                = length(local.vm_config_data.vms)
+  name                 = local.vm_config_data.vms[count.index].name
+  location             = azurerm_resource_group.juliovm.location
+  resource_group_name  = azurerm_resource_group.juliovm.name
+  network_interface_ids = [element(azurerm_network_interface.example[*].id, count.index)]
+
+  vm_size              = local.vm_config_data.vms[count.index].vm_size
+
+  storage_os_disk {
+    name              = "${local.vm_config_data.vms[count.index].name}-osdisk"
+    caching           = "ReadWrite"
+    create_option     = "FromImage"
+    managed_disk_type = "Premium_LRS"
+  }
+
+  storage_image_reference {
+    publisher = "Canonical"
+    offer     = "UbuntuServer"
+    sku       = "16.04-LTS"
+    version   = "latest"
+  }
+
+  os_profile {
+    computer_name  = local.vm_config_data.vms[count.index].name
+    admin_username = "adminuser"
+  }
+
+  os_profile_linux_config {
+    disable_password_authentication = true
+
+    ssh_keys {
+      path     = "/home/adminuser/.ssh/authorized_keys"
+      key_data = "ssh-rsa <YOUR_SSH_PUBLIC_KEY>"
+    }
+  }
 }
