@@ -14,5 +14,5 @@ variable "tenant_id"{
 
 variable "myresourcegroupname" {
   type=string
-  default = "mcit420zz5um"
+  default = "juliovm"
 }
