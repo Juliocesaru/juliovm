@@ -1,8 +1,3 @@
-variable "yamlconfiguration" {
-  description = 
-  default     = "vm.yaml"
-}
-
 locals {
   yamlconfiguration_data = yamldecode(file(var.yamlconfiguration))
 }
